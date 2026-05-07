@@ -1,0 +1,21 @@
+node_name: leap_hand_sim
+time_step: 0.005
+xml_path: mujoco/asserts/scene/scene_leap_right.xml
+simulation:
+  duration: 10.0
+  max_steps: 2000
+topics:
+  teleop_angles: /allegro_teleop_angles
+  wrist_pose: /allegro_wrist_pose
+  target_vis: /allegro_target_vis
+  joint_state: /allegro_joint_state
+controller:
+  kp: 100.0
+  ki: 0.1
+  kd: 0.01
+visualization:
+  show_contact_points: true
+  show_target_vectors: true
+logging:
+  level: INFO
+  file: simulation.log

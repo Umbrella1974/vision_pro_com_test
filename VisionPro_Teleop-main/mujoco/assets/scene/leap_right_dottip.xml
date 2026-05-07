@@ -1,0 +1,282 @@
+<mujoco model="leap_right_dottip">
+  <!-- <option gravity="0 0 0" /> -->
+  <option>
+    <flag contact="disable" />
+  </option>
+
+  <compiler angle="radian" meshdir="assets" autolimits="true" eulerseq="xyz"/>
+
+  <asset>
+    <material name="black" rgba="0.2 0.2 0.2 1"/>
+    <material name="white" rgba="0.9 0.9 0.9 1"/>
+    <material name="tip" rgba="0.8627 0.7868 0.5568 1.0"/>
+
+    <mesh name="palm_lower" file="palm_lower.stl"/>
+    <mesh name="mcp_joint" file="mcp_joint.stl"/>
+    <mesh name="pip" file="pip.stl"/>
+    <mesh name="dip" file="dip.stl"/>
+    <mesh name="tip_base" file="tip_base.stl"/>
+    <mesh name="DotTip" file="DotTip.stl"/>
+    <mesh name="thumb_pip" file="thumb_pip.stl"/>
+    <mesh name="thumb_dip" file="thumb_dip.stl"/>
+    <mesh name="thumb_tip_base" file="thumb_tip_base.stl"/>
+    <mesh name="DotTip-thumb" file="DotTip-thumb.stl"/>
+  </asset>
+
+  <default>
+    <default class="leap_right">
+      <joint axis="0 0 -1" damping=".4" />
+      <!-- <joint axis="0 0 -1" /> -->
+      <position kp="2.0" />
+      <geom density="800" />
+
+      <!-- Visual classes -->
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2" material="black"/>
+        <default class="palm_visual">
+          <geom mesh="palm_lower" pos="-0.0200952 0.0257578 -0.0347224" />
+        </default>
+        <default class="mcp_joint_visual">
+          <geom mesh="mcp_joint" pos="0.0084069 0.00776624 0.0146574" quat="1 0 0 0" />
+        </default>
+        <default class="pip_visual">
+          <geom mesh="pip" pos="0.00964336 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" />
+        </default>
+        <default class="dip_visual">
+          <geom mesh="dip" pos="0.0211334 -0.00843212 0.00978509" quat="0 -1 0 0" />
+        </default>
+        <default class="tip_base_visual">
+          <geom mesh="tip_base" pos="0 -0.014 0.014499" quat="1.32679e-06 1 0 0"/>
+        </default>
+        <default class="fingertip_visual">
+          <geom mesh="DotTip" pos="-0.01 -0.048 0.014499" quat="9.38184e-07 0.707105 -0.707108 -9.38187e-07" material="tip" />
+        </default>
+        <default class="thumb_pip_visual">
+          <geom mesh="thumb_pip" pos="0.0119619 0 -0.0158526" quat="0.707107 0.707107 0 0" />
+        </default>
+        <default class="thumb_dip_visual">
+          <geom mesh="thumb_dip" pos="0.0439687 0.057953 -0.00862868" quat="1 0 0 0"/>
+        </default>
+        <default class="thumb_tip_base_visual">
+          <geom mesh="thumb_tip_base" pos="0 0 -0.0065"/>
+        </default>
+        <default class="thumb_fingertip_visual">
+          <geom mesh="DotTip-thumb" pos="-0.0102 -0.0645 -0.0145" quat="9.38184e-07 0.707105 -0.707108 -9.38187e-07" material="tip"/>
+        </default>
+      </default>
+      <!-- Collision Classes -->
+      <default class="collision">
+        <geom group="3" type="box" mass="0" contype="1" conaffinity="1"/>
+        <default class="palm_collision">
+          <geom mesh="palm_lower" pos="-0.0200952 0.0257578 -0.0347224" />
+        </default>
+        <default class="mcp_joint_collision">
+          <geom mesh="mcp_joint" pos="0.0084069 0.00776624 0.0146574" quat="1 0 0 0" />
+        </default>
+        <default class="pip_collision">
+          <geom mesh="pip" pos="0.00964336 0.0003 0.000784034" quat="0.5 -0.5 -0.5 -0.5" />
+        </default>
+        <default class="dip_collision">
+          <geom mesh="dip" pos="0.0211334 -0.00843212 0.00978509" quat="0 -1 0 0" />
+        </default>
+        <default class="tip_base_collision">
+          <geom mesh="tip_base" pos="0 -0.014 0.014499" quat="1.32679e-06 1 0 0"/>
+        </default>
+        <default class="fingertip_collision">
+          <geom mesh="DotTip" pos="-0.01 -0.048 0.014499" quat="9.38184e-07 0.707105 -0.707108 -9.38187e-07" />
+        </default>
+        <default class="thumb_pip_collision">
+          <geom mesh="thumb_pip" pos="0.0119619 0 -0.0158526" quat="0.707107 0.707107 0 0" />
+        </default>
+        <default class="thumb_dip_collision">
+          <geom mesh="thumb_dip" pos="0.0439687 0.057953 -0.00862868" quat="1 0 0 0"/>
+        </default>
+        <default class="thumb_tip_base_collision">
+          <geom mesh="thumb_tip_base" pos="0 0 -0.0065"/>
+        </default>
+        <default class="thumb_fingertip_collision">
+          <geom mesh="DotTip-thumb" pos="-0.0102 -0.0645 -0.0145" quat="9.38184e-07 0.707105 -0.707108 -9.38187e-07"/>
+        </default>
+      </default>
+
+      <!-- Joint Classes -->
+      <default class="mcp_joint">
+        <joint axis="0 0 -1" range="-0.314 2.23"/>
+        <position ctrlrange="-0.314 2.23"/>
+      </default>
+      <default class="pip">
+        <joint axis="0 0 -1" range="-1.047 1.047"/>
+        <position ctrlrange="-1.047 1.047"/>
+      </default>
+      <default class="dip">
+        <joint axis="0 0 -1" range="-0.506 1.885"/>
+        <position ctrlrange="-0.506 1.885"/>
+      </default>
+      <default class="fingertip">
+        <joint axis="0 0 -1" range="-0.366 2.042"/>
+        <position ctrlrange="-0.366 2.042"/>
+      </default>
+      <default class="thumb_base">
+        <joint axis="0 0 -1" range="-0.349 2.094"/>
+        <position ctrlrange="-0.349 2.094"/>
+      </default>
+      <default class="thumb_pip">
+        <joint axis="0 0 -1" range="-0.47 2.443"/>
+        <position ctrlrange="-0.47 2.443"/>
+      </default>
+      <default class="thumb_dip">
+        <joint axis="0 0 -1" range="-1.2 1.9"/>
+        <position ctrlrange="-1.2 1.9"/>
+      </default>
+      <default class="thumb_tip">
+        <joint axis="0 0 -1" range="-1.34 1.88"/>
+        <position ctrlrange="-1.34 1.88"/>
+      </default>
+
+    </default>
+  </default>
+
+  <worldbody>
+    <body name="mount" pos="0. 0. 0.4" euler="0. 0. 0." mocap="true">
+      <geom type="sphere" size="0.015" rgba="1 1 1 0.8" mass="0" />
+      <!-- 0.07 0.022392243865100525113 0.0 -->
+      <!-- <body name="palm_lower" pos=" -0.035 -0.060 0.02" euler="3.141593 0. 1.5708" childclass="leap_right"> -->
+      <body name="palm_lower" pos=" -0.02239 -0.070 0.0" euler="3.141593 0. 1.5708" childclass="leap_right">
+        <geom class="palm_visual"/>
+        <geom class="palm_collision"/>
+        <!-- wrist pos or Palm Center -->
+        <geom type="sphere" size="0.01" pos="-0.1 -0.0223922 -0.0187224" quat="0.707107 0 0.707107 0" contype="0" conaffinity="0" group="5" density="0" rgba="1 0 0 1" mass="0"/>
+
+        <!-- Index -->
+        <body name="mcp_joint" pos="-0.00709525 0.0230578 -0.0187224" quat="0.5 0.5 0.5 -0.5" gravcomp="1">
+          <!-- <inertial pos="0 0 0" quat="0.388585 0.626468 -0.324549 0.592628" mass="0.044" diaginertia="1.47756e-05 1.31982e-05 6.0802e-06"/> -->
+          <joint name="1" pos="0 0 0" class="mcp_joint"/>
+          <geom class="mcp_joint_visual"/>
+          <geom class="mcp_joint_collision"/>
+          <body name="pip" pos="-0.0122 0.0381 0.0145" quat="0.5 -0.5 -0.5 0.5" gravcomp="1">
+            <!-- <inertial pos="0 0 0" quat="0.709913 0.704273 -0.000363156 0.00475427" mass="0.032" diaginertia="4.7981e-06 4.23406e-06 2.86184e-06"/> -->
+            <joint name="0" pos="0 0 0" class="pip"/>
+            <geom class="pip_visual"/>
+            <geom class="pip_collision"/>
+            <body name="dip" pos="0.015 0.0143 -0.013" quat="0.5 0.5 -0.5 0.5" gravcomp="1">
+              <!-- <inertial pos="0 0 0" quat="-0.252689 0.659216 0.238844 0.666735" mass="0.037" diaginertia="6.68256e-06 6.24841e-06 5.02002e-06"/> -->
+              <joint name="2" pos="0 0 0" class="dip"/>
+              <geom class="dip_visual"/>
+              <geom class="dip_collision"/>
+              <body name="tip_base" pos="0 -0.0361 0" gravcomp="1">
+                <!-- <inertial pos="-0.00666667 -0.032 0.009666" quat="0.788235 0.605352 -0.108534 0.0213158" mass="0.024" diaginertia="2.05348e-05 1.94533e-05 3.47083e-06"/> -->
+                <joint name="3" pos="0 0 0" class="fingertip"/>
+                <geom class="tip_base_visual"/>
+                <geom class="tip_base_collision"/>
+                <geom class="fingertip_visual"/>
+                <geom class="fingertip_collision"/>
+              </body>
+            </body>
+          </body>
+        </body>
+
+        <!-- Middle -->
+        <body name="mcp_joint_2" pos="-0.00709525 -0.0223922 -0.0187224" quat="0.5 0.5 0.5 -0.5" gravcomp="1">
+          <!-- <inertial pos="0 0 0" quat="0.388585 0.626468 -0.324549 0.592628" mass="0.044" diaginertia="1.47756e-05 1.31982e-05 6.0802e-06"/> -->
+          <joint name="5" pos="0 0 0" class="mcp_joint"/>
+          <geom class="mcp_joint_visual"/>
+          <geom class="mcp_joint_collision"/>
+          <body name="pip_2" pos="-0.0122 0.0381 0.0145" quat="0.5 -0.5 -0.5 0.5" gravcomp="1">
+            <!-- <inertial pos="0 0 0" quat="0.709913 0.704273 -0.000363156 0.00475427" mass="0.032" diaginertia="4.7981e-06 4.23406e-06 2.86184e-06"/> -->
+            <joint name="4" pos="0 0 0" class="pip"/>
+            <geom class="pip_visual"/>
+            <geom class="pip_collision"/>
+            <body name="dip_2" pos="0.015 0.0143 -0.013" quat="0.5 0.5 -0.5 0.5" gravcomp="1">
+              <!-- <inertial pos="0 0 0" quat="-0.252689 0.659216 0.238844 0.666735" mass="0.037" diaginertia="6.68256e-06 6.24841e-06 5.02002e-06"/> -->
+              <joint name="6" pos="0 0 0" class="dip"/>
+              <geom class="dip_visual"/>
+              <geom class="dip_collision"/>
+              <body name="tip_base_2" pos="0 -0.0361 0.0002" gravcomp="1">
+                <!-- <inertial pos="-0.00666667 -0.032 0.009666" quat="0.788235 0.605352 -0.108534 0.0213158" mass="0.024" diaginertia="2.05348e-05 1.94533e-05 3.47083e-06"/> -->
+                <joint name="7" pos="0 0 0" class="fingertip"/>
+                <geom class="tip_base_visual"/>
+                <geom class="tip_base_collision"/>
+                <geom class="fingertip_visual"/>
+                <geom class="fingertip_collision"/>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="mcp_joint_3" pos="-0.00709525 -0.0678422 -0.0187224" quat="0.5 0.5 0.5 -0.5" gravcomp="1">
+          <!-- <inertial pos="0 0 0" quat="0.388585 0.626468 -0.324549 0.592628" mass="0.044" diaginertia="1.47756e-05 1.31982e-05 6.0802e-06"/> -->
+          <joint name="9" pos="0 0 0" class="mcp_joint"/>
+          <geom class="mcp_joint_visual"/>
+          <geom class="mcp_joint_collision"/>
+          <body name="pip_3" pos="-0.0122 0.0381 0.0145" quat="0.5 -0.5 -0.5 0.5" gravcomp="1">
+            <!-- <inertial pos="0 0 0" quat="0.709913 0.704273 -0.000363156 0.00475427" mass="0.032" diaginertia="4.7981e-06 4.23406e-06 2.86184e-06"/> -->
+            <joint name="8" pos="0 0 0" class="pip"/>
+            <geom class="pip_visual"/>
+            <geom class="pip_collision"/>
+            <body name="dip_3" pos="0.015 0.0143 -0.013" quat="0.5 0.5 -0.5 0.5" gravcomp="1">
+              <!-- <inertial pos="0 0 0" quat="-0.252689 0.659216 0.238844 0.666735" mass="0.037" diaginertia="6.68256e-06 6.24841e-06 5.02002e-06"/> -->
+              <joint name="10" pos="0 0 0" class="dip"/>
+              <geom class="dip_visual"/>
+              <geom class="dip_collision"/>
+              <body name="tip_base_3" pos="0 -0.0361 0.0002" gravcomp="1">
+                <!-- <inertial pos="-0.00666667 -0.032 0.009666" quat="0.788235 0.605352 -0.108534 0.0213158" mass="0.024" diaginertia="2.05348e-05 1.94533e-05 3.47083e-06"/> -->
+                <joint name="11" pos="0 0 0" class="fingertip"/>
+                <geom class="tip_base_visual"/>
+                <geom class="tip_base_collision"/>
+                <geom class="fingertip_visual"/>
+                <geom class="fingertip_collision"/>
+              </body>
+            </body>
+          </body>
+        </body>
+        <body name="pip_4" pos="-0.0693952 -0.00124224 -0.0216224" quat="0.707107 0 0.707107 0" gravcomp="1">
+          <!-- <inertial pos="0 0 0" quat="0.709913 0.704273 -0.000363156 0.00475427" mass="0.032" diaginertia="4.7981e-06 4.23406e-06 2.86184e-06"/> -->
+          <joint name="12" pos="0 0 0" class="thumb_base"/>
+          <geom class="pip_visual"/>
+          <geom class="pip_collision"/>
+          <body name="thumb_pip" pos="0 0.0143 -0.013" quat="0.5 0.5 -0.5 0.5" gravcomp="1">
+            <!-- <inertial pos="0 0 0" mass="0.003" diaginertia="5.93e-07 5.49e-07 2.24e-07"/> -->
+            <joint name="13" pos="0 0 0" class="thumb_pip"/>
+            <geom class="thumb_pip_visual"/>
+            <geom class="thumb_pip_collision"/>
+            <body name="thumb_dip" pos="0 0.0145 -0.017" quat="0.707107 -0.707107 0 0" gravcomp="1">
+              <!-- <inertial pos="0 0 0" quat="0.708624 0.704906 0.00637342 0.0303153" mass="0.038" diaginertia="8.48742e-06 7.67823e-06 3.82835e-06"/> -->
+              <joint name="14" pos="0 0 0" class="thumb_dip"/>
+              <geom class="thumb_dip_visual"/>
+              <geom class="thumb_dip_collision"/>
+              <body name="thumb_tip_base" pos="0 0.0466 0.0002" quat="0 0 0 1" gravcomp="1">
+                <!-- <inertial pos="-0.0068 -0.043 -0.00966667" quat="0.627654 0.773614 0.00709606 -0.0867235" mass="0.024" diaginertia="3.04858e-05 2.94617e-05 3.35492e-06"/> -->
+                <joint name="15" pos="0 0 0" class="thumb_tip"/>
+                <geom class="thumb_tip_base_visual"/>
+                <geom class="thumb_tip_base_collision"/>
+                <geom class="thumb_fingertip_visual"/>
+                <geom class="thumb_fingertip_collision"/>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+
+  <actuator>
+    <position name="ifa0" joint="0" class="pip"/>
+    <position name="ifa1" joint="1" class="mcp_joint"/>
+    <position name="ifa2" joint="2" class="dip"/>
+    <position name="ifa3" joint="3" class="fingertip"/>
+    <position name="mfa0" joint="4" class="pip"/>
+    <position name="mfa1" joint="5" class="mcp_joint"/>
+    <position name="mfa2" joint="6" class="dip"/>
+    <position name="mfa3" joint="7" class="fingertip"/>
+    <position name="rfa0" joint="8" class="pip"/>
+    <position name="rfa1" joint="9" class="mcp_joint"/>
+    <position name="rfa2" joint="10" class="dip"/>
+    <position name="rfa3" joint="11" class="fingertip"/>
+    <position name="tfa0" joint="12" class="thumb_base"/>
+    <position name="tfa1" joint="13" class="thumb_pip"/>
+    <position name="tfa2" joint="14" class="thumb_dip"/>
+    <position name="tfa3" joint="15" class="thumb_tip"/>
+  </actuator>
+
+
+</mujoco>

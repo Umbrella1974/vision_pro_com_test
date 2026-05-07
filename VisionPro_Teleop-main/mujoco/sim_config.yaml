@@ -1,0 +1,38 @@
+# config.yaml
+
+# 节点名称
+node_name: leap_hand_sim
+
+# 时间步长
+time_step: 0.005
+
+# XML 文件路径
+xml_path: "assets/scene/scene_leap_right.xml"
+
+# 其他配置项
+simulation:
+  duration: 10.0  # 模拟持续时间（秒）
+  max_steps: 2000  # 最大步数
+
+# 话题名称
+topics:
+  desired_qpos_hand: /allegro_teleop_angles
+  desired_wrist_pose: /allegro_wrist_pose
+  target_vis: /allegro_target_vis
+  joint_state: /allegro_joint_state
+
+# 控制器参数
+controller:
+  kp: 100.0  # 比例增益
+  ki: 0.1    # 积分增益
+  kd: 0.01   # 微分增益
+
+# 视觉参数
+visualization:
+  show_contact_points: true  # 是否显示接触点
+  show_target_vectors: true  # 是否显示目标向量
+
+# 日志参数
+logging:
+  level: INFO  # 日志级别
+  file: simulation.log  # 日志文件路径
