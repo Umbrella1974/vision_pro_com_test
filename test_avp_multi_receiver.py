@@ -32,6 +32,8 @@ from __future__ import annotations
 import argparse
 import multiprocessing as mp
 import queue
+import socket
+import struct
 import sys
 import time
 from typing import Any
@@ -55,6 +57,31 @@ SOURCE_FRAME_KEYS = (
 
 MISSING = object()
 POLL_SLEEP_SECONDS = 0.002
+
+VIEWER_MAGIC = b"VTLP"
+VIEWER_HEADER_FMT = "<4s B B I d H"
+VIEWER_MSG_HAND_RIGHT = 11
+VIEWER_N_JOINTS = 21
+VIEWER_N_DIMS = 3
+VIEWER_N_FLOATS = VIEWER_N_JOINTS * VIEWER_N_DIMS
+VIEWER_PAYLOAD_FMT = f"<{VIEWER_N_FLOATS}f"
+
+# Vision Pro 25-point hand layout -> MediaPipe-like 21-point layout.
+VP_TO_VIEWER_21 = [
+    0,
+    1, 2, 3, 4,
+    6, 7, 8, 9,
+    11, 12, 13, 14,
+    16, 17, 18, 19,
+    21, 22, 23, 24,
+]
+
+# ARKit -> viewer coordinates so fingers point up in the default xy projection.
+ARKIT_TO_VIEWER = (
+    (0.0, 1.0, 0.0),
+    (-1.0, 0.0, 0.0),
+    (0.0, 0.0, 1.0),
+)
 
 
 class DependencyError(RuntimeError):
@@ -87,6 +114,49 @@ def load_dependencies():
 
 def format_exception(exc: BaseException) -> str:
     return f"{type(exc).__name__}: {exc}"
+
+
+def pack_viewer_right_hand_packet(joints: Any, frame_id: int, timestamp: float) -> bytes:
+    flat = []
+    for row in joints:
+        flat.extend(float(v) for v in row)
+    header = struct.pack(
+        VIEWER_HEADER_FMT,
+        VIEWER_MAGIC,
+        1,
+        VIEWER_MSG_HAND_RIGHT,
+        frame_id & 0xFFFFFFFF,
+        float(timestamp),
+        VIEWER_N_FLOATS,
+    )
+    payload = struct.pack(VIEWER_PAYLOAD_FMT, *flat)
+    return header + payload
+
+
+def extract_finger_positions(np_module: Any, fingers_25x4x4: Any) -> Any:
+    array = np_module.asarray(fingers_25x4x4, dtype=np_module.float64)
+    if array.shape != (25, 4, 4):
+        raise ValueError(f"right_fingers shape must be (25, 4, 4), got {array.shape}")
+    return array[:, :3, 3].astype(np_module.float32)
+
+
+def convert_positions_to_viewer(np_module: Any, positions_25x3: Any, wrist_4x4: Any = None) -> Any:
+    positions = np_module.asarray(positions_25x3, dtype=np_module.float32)
+    if positions.shape != (25, 3):
+        raise ValueError(f"positions shape must be (25, 3), got {positions.shape}")
+
+    joints = positions[VP_TO_VIEWER_21].copy()
+
+    if wrist_4x4 is not None:
+        wrist = np_module.asarray(wrist_4x4, dtype=np_module.float32)
+        if wrist.shape != (1, 4, 4):
+            raise ValueError(f"right_wrist shape must be (1, 4, 4), got {wrist.shape}")
+        wrist_pos = wrist[0, :3, 3].astype(np_module.float32)
+        joints[0] = wrist_pos
+        joints -= wrist_pos
+
+    transform = np_module.asarray(ARKIT_TO_VIEWER, dtype=np_module.float32)
+    return (joints @ transform.T).astype(np_module.float32)
 
 
 def safe_shape(np_module: Any, value: Any) -> Any:
@@ -212,6 +282,7 @@ def receiver_worker(
     ip: str,
     record: bool,
     hz: float,
+    viewer_config: dict[str, Any],
     stop_event: Any,
     status_queue: Any,
 ) -> None:
@@ -268,166 +339,201 @@ def receiver_worker(
     previous_source_key = None
     previous_source_value = None
     vps = None
+    viewer_sock = None
+    viewer_frame_id = 0
+    viewer_last_send_monotonic = 0.0
 
-    while not stop_event.is_set():
-        if vps is None:
+    viewer_enabled = bool(viewer_config.get("enabled")) and (
+        viewer_config.get("receiver_id") == receiver_id
+    )
+    viewer_ip = viewer_config.get("ip", "127.0.0.1")
+    viewer_port = int(viewer_config.get("port", 5005))
+    viewer_rate = float(viewer_config.get("rate", 30.0))
+    viewer_period = 1.0 / max(viewer_rate, 1e-6)
+
+    if viewer_enabled:
+        viewer_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    try:
+        while not stop_event.is_set():
+            if vps is None:
+                try:
+                    vps = VisionProStreamer(ip=ip, record=record)
+                    last_error = None
+                    invalid_reason = None
+                except Exception as exc:
+                    last_error = format_exception(exc)
+                    invalid_reason = "streamer_init_failed"
+                    now = time.monotonic()
+                    if now >= next_report_time:
+                        put_status(
+                            status_queue,
+                            build_status(
+                                receiver_id=receiver_id,
+                                start_monotonic=start_monotonic,
+                                poll_count=poll_count,
+                                valid_count=valid_count,
+                                changed_count=changed_count,
+                                unchanged_count=unchanged_count,
+                                last_keys=last_keys,
+                                right_wrist_exists=right_wrist_exists,
+                                left_wrist_exists=left_wrist_exists,
+                                right_fingers_shape=right_fingers_shape,
+                                left_fingers_shape=left_fingers_shape,
+                                local_receive_time=local_receive_time,
+                                last_error=last_error,
+                                invalid_reason=invalid_reason,
+                                source_frame_key=previous_source_key,
+                                source_frame_value=previous_source_value,
+                                source_new_frame_count=source_new_frame_count,
+                                source_unchanged_count=source_unchanged_count,
+                            ),
+                        )
+                        next_report_time = now + report_interval
+                    if stop_event.wait(1.0):
+                        break
+                    continue
+
+            poll_count += 1
             try:
-                vps = VisionProStreamer(ip=ip, record=record)
+                data = vps.latest
                 last_error = None
-                invalid_reason = None
             except Exception as exc:
                 last_error = format_exception(exc)
-                invalid_reason = "streamer_init_failed"
-                now = time.monotonic()
-                if now >= next_report_time:
-                    put_status(
-                        status_queue,
-                        build_status(
-                            receiver_id=receiver_id,
-                            start_monotonic=start_monotonic,
-                            poll_count=poll_count,
-                            valid_count=valid_count,
-                            changed_count=changed_count,
-                            unchanged_count=unchanged_count,
-                            last_keys=last_keys,
-                            right_wrist_exists=right_wrist_exists,
-                            left_wrist_exists=left_wrist_exists,
-                            right_fingers_shape=right_fingers_shape,
-                            left_fingers_shape=left_fingers_shape,
-                            local_receive_time=local_receive_time,
-                            last_error=last_error,
-                            invalid_reason=invalid_reason,
-                            source_frame_key=previous_source_key,
-                            source_frame_value=previous_source_value,
-                            source_new_frame_count=source_new_frame_count,
-                            source_unchanged_count=source_unchanged_count,
-                        ),
-                    )
-                    next_report_time = now + report_interval
-                if stop_event.wait(1.0):
-                    break
-                continue
+                invalid_reason = "read_latest_failed"
+                data = None
 
-        poll_count += 1
-        try:
-            data = vps.latest
-            last_error = None
-        except Exception as exc:
-            last_error = format_exception(exc)
-            invalid_reason = "read_latest_failed"
-            data = None
+            local_receive_time = time.time()
+            now = time.monotonic()
 
-        local_receive_time = time.time()
-        now = time.monotonic()
+            last_keys = []
+            right_wrist_exists = False
+            left_wrist_exists = False
+            right_fingers_shape = None
+            left_fingers_shape = None
 
-        last_keys = []
-        right_wrist_exists = False
-        left_wrist_exists = False
-        right_fingers_shape = None
-        left_fingers_shape = None
-
-        if data is None:
-            invalid_reason = invalid_reason or "data_is_none"
-        elif not isinstance(data, dict):
-            invalid_reason = f"data_is_{type(data).__name__}_not_dict"
-        elif not data:
-            invalid_reason = "data_is_empty_dict"
-        else:
-            invalid_reason = None
-            valid_count += 1
-            last_keys = sorted(str(key) for key in data.keys())
-            right_wrist_exists = "right_wrist" in data
-            left_wrist_exists = "left_wrist" in data
-            right_fingers_shape = safe_shape(np_module, data.get("right_fingers", MISSING))
-            left_fingers_shape = safe_shape(np_module, data.get("left_fingers", MISSING))
-
-            current_states = {
-                field: make_field_state(np_module, data.get(field, MISSING))
-                for field in KEY_FIELDS
-            }
-
-            any_changed = previous_states is None or any(
-                not field_states_equal(np_module, previous_states[field], current_states[field])
-                for field in KEY_FIELDS
-            )
-
-            if any_changed:
-                changed_count += 1
-                unchanged_count = 0
+            if data is None:
+                invalid_reason = invalid_reason or "data_is_none"
+            elif not isinstance(data, dict):
+                invalid_reason = f"data_is_{type(data).__name__}_not_dict"
+            elif not data:
+                invalid_reason = "data_is_empty_dict"
             else:
-                unchanged_count += 1
+                invalid_reason = None
+                valid_count += 1
+                last_keys = sorted(str(key) for key in data.keys())
+                right_wrist_exists = "right_wrist" in data
+                left_wrist_exists = "left_wrist" in data
+                right_fingers_shape = safe_shape(np_module, data.get("right_fingers", MISSING))
+                left_fingers_shape = safe_shape(np_module, data.get("left_fingers", MISSING))
 
-            previous_states = current_states
+                current_states = {
+                    field: make_field_state(np_module, data.get(field, MISSING))
+                    for field in KEY_FIELDS
+                }
 
-            source_frame_key, source_frame_value = extract_source_frame_info(np_module, data)
-            if source_frame_key is not None:
-                if (
-                    previous_source_key != source_frame_key
-                    or previous_source_value != source_frame_value
-                ):
-                    source_new_frame_count += 1
-                    source_unchanged_count = 0
+                any_changed = previous_states is None or any(
+                    not field_states_equal(np_module, previous_states[field], current_states[field])
+                    for field in KEY_FIELDS
+                )
+
+                if any_changed:
+                    changed_count += 1
+                    unchanged_count = 0
                 else:
-                    source_unchanged_count += 1
-                previous_source_key = source_frame_key
-                previous_source_value = source_frame_value
-            else:
-                previous_source_key = None
-                previous_source_value = None
-                source_unchanged_count = 0
+                    unchanged_count += 1
 
-        if now >= next_report_time:
-            put_status(
-                status_queue,
-                build_status(
-                    receiver_id=receiver_id,
-                    start_monotonic=start_monotonic,
-                    poll_count=poll_count,
-                    valid_count=valid_count,
-                    changed_count=changed_count,
-                    unchanged_count=unchanged_count,
-                    last_keys=last_keys,
-                    right_wrist_exists=right_wrist_exists,
-                    left_wrist_exists=left_wrist_exists,
-                    right_fingers_shape=right_fingers_shape,
-                    left_fingers_shape=left_fingers_shape,
-                    local_receive_time=local_receive_time,
-                    last_error=last_error,
-                    invalid_reason=invalid_reason,
-                    source_frame_key=previous_source_key,
-                    source_frame_value=previous_source_value,
-                    source_new_frame_count=source_new_frame_count,
-                    source_unchanged_count=source_unchanged_count,
-                ),
-            )
-            next_report_time = now + report_interval
+                previous_states = current_states
 
-        if stop_event.wait(POLL_SLEEP_SECONDS):
-            break
+                source_frame_key, source_frame_value = extract_source_frame_info(np_module, data)
+                if source_frame_key is not None:
+                    if (
+                        previous_source_key != source_frame_key
+                        or previous_source_value != source_frame_value
+                    ):
+                        source_new_frame_count += 1
+                        source_unchanged_count = 0
+                    else:
+                        source_unchanged_count += 1
+                    previous_source_key = source_frame_key
+                    previous_source_value = source_frame_value
+                else:
+                    previous_source_key = None
+                    previous_source_value = None
+                    source_unchanged_count = 0
 
-    put_status(
-        status_queue,
-        build_status(
-            receiver_id=receiver_id,
-            start_monotonic=start_monotonic,
-            poll_count=poll_count,
-            valid_count=valid_count,
-            changed_count=changed_count,
-            unchanged_count=unchanged_count,
-            last_keys=last_keys,
-            right_wrist_exists=right_wrist_exists,
-            left_wrist_exists=left_wrist_exists,
-            right_fingers_shape=right_fingers_shape,
-            left_fingers_shape=left_fingers_shape,
-            local_receive_time=local_receive_time,
-            last_error=last_error,
-            invalid_reason=invalid_reason,
-            source_frame_key=previous_source_key,
-            source_frame_value=previous_source_value,
-            source_new_frame_count=source_new_frame_count,
-            source_unchanged_count=source_unchanged_count,
-        ),
-    )
+                if viewer_enabled and right_wrist_exists and "right_fingers" in data:
+                    if now - viewer_last_send_monotonic >= viewer_period:
+                        try:
+                            positions = extract_finger_positions(np_module, data["right_fingers"])
+                            wrist = data.get("right_wrist")
+                            joints = convert_positions_to_viewer(np_module, positions, wrist)
+                            packet = pack_viewer_right_hand_packet(
+                                joints=joints,
+                                frame_id=viewer_frame_id,
+                                timestamp=local_receive_time,
+                            )
+                            viewer_sock.sendto(packet, (viewer_ip, viewer_port))
+                            viewer_frame_id = (viewer_frame_id + 1) & 0xFFFFFFFF
+                            viewer_last_send_monotonic = now
+                        except Exception as exc:
+                            last_error = f"viewer_forward_failed: {format_exception(exc)}"
+
+            if now >= next_report_time:
+                put_status(
+                    status_queue,
+                    build_status(
+                        receiver_id=receiver_id,
+                        start_monotonic=start_monotonic,
+                        poll_count=poll_count,
+                        valid_count=valid_count,
+                        changed_count=changed_count,
+                        unchanged_count=unchanged_count,
+                        last_keys=last_keys,
+                        right_wrist_exists=right_wrist_exists,
+                        left_wrist_exists=left_wrist_exists,
+                        right_fingers_shape=right_fingers_shape,
+                        left_fingers_shape=left_fingers_shape,
+                        local_receive_time=local_receive_time,
+                        last_error=last_error,
+                        invalid_reason=invalid_reason,
+                        source_frame_key=previous_source_key,
+                        source_frame_value=previous_source_value,
+                        source_new_frame_count=source_new_frame_count,
+                        source_unchanged_count=source_unchanged_count,
+                    ),
+                )
+                next_report_time = now + report_interval
+
+            if stop_event.wait(POLL_SLEEP_SECONDS):
+                break
+    finally:
+        if viewer_sock is not None:
+            viewer_sock.close()
+
+        put_status(
+            status_queue,
+            build_status(
+                receiver_id=receiver_id,
+                start_monotonic=start_monotonic,
+                poll_count=poll_count,
+                valid_count=valid_count,
+                changed_count=changed_count,
+                unchanged_count=unchanged_count,
+                last_keys=last_keys,
+                right_wrist_exists=right_wrist_exists,
+                left_wrist_exists=left_wrist_exists,
+                right_fingers_shape=right_fingers_shape,
+                left_fingers_shape=left_fingers_shape,
+                local_receive_time=local_receive_time,
+                last_error=last_error,
+                invalid_reason=invalid_reason,
+                source_frame_key=previous_source_key,
+                source_frame_value=previous_source_value,
+                source_new_frame_count=source_new_frame_count,
+                source_unchanged_count=source_unchanged_count,
+            ),
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -457,6 +563,34 @@ def parse_args() -> argparse.Namespace:
         choices=("single", "dual"),
         default="dual",
         help="single starts one receiver, dual starts two. Default: dual",
+    )
+    parser.add_argument(
+        "--forward-viewer",
+        action="store_true",
+        help="Forward one receiver's right-hand data to the hand-ex-render UDP viewer.",
+    )
+    parser.add_argument(
+        "--viewer-ip",
+        default="127.0.0.1",
+        help="UDP target IP for viewer forwarding. Default: 127.0.0.1",
+    )
+    parser.add_argument(
+        "--viewer-port",
+        type=int,
+        default=5005,
+        help="UDP target port for viewer forwarding. Default: 5005",
+    )
+    parser.add_argument(
+        "--viewer-rate",
+        type=float,
+        default=30.0,
+        help="Viewer forwarding packet rate in Hz. Default: 30",
+    )
+    parser.add_argument(
+        "--viewer-receiver",
+        choices=("A", "B"),
+        default="A",
+        help="Which receiver forwards right-hand data to the viewer. Default: A",
     )
     return parser.parse_args()
 
@@ -569,6 +703,12 @@ def main() -> int:
     if args.hz <= 0:
         print("--hz must be > 0", file=sys.stderr)
         return 2
+    if args.viewer_rate <= 0:
+        print("--viewer-rate must be > 0", file=sys.stderr)
+        return 2
+    if not (0 <= args.viewer_port <= 65535):
+        print("--viewer-port must be between 0 and 65535", file=sys.stderr)
+        return 2
 
     try:
         load_dependencies()
@@ -580,12 +720,34 @@ def main() -> int:
     stop_event = ctx.Event()
     status_queue = ctx.Queue()
     receiver_ids = ["A"] if args.mode == "single" else ["A", "B"]
+    viewer_config = {
+        "enabled": args.forward_viewer,
+        "ip": args.viewer_ip,
+        "port": args.viewer_port,
+        "rate": args.viewer_rate,
+        "receiver_id": args.viewer_receiver,
+    }
+
+    if args.forward_viewer and args.viewer_receiver not in receiver_ids:
+        print(
+            f"--viewer-receiver {args.viewer_receiver} is not active in --mode {args.mode}",
+            file=sys.stderr,
+        )
+        return 2
 
     processes: list[mp.Process] = []
     for receiver_id in receiver_ids:
         process = ctx.Process(
             target=receiver_worker,
-            args=(receiver_id, args.ip, args.record, args.hz, stop_event, status_queue),
+            args=(
+                receiver_id,
+                args.ip,
+                args.record,
+                args.hz,
+                viewer_config,
+                stop_event,
+                status_queue,
+            ),
             name=f"avp_receiver_{receiver_id}",
         )
         process.start()
