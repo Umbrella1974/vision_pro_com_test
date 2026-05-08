@@ -147,13 +147,11 @@ def convert_positions_to_viewer(np_module: Any, positions_25x3: Any, wrist_4x4: 
 
     joints = positions[VP_TO_VIEWER_21].copy()
 
-    if wrist_4x4 is not None:
-        wrist = np_module.asarray(wrist_4x4, dtype=np_module.float32)
-        if wrist.shape != (1, 4, 4):
-            raise ValueError(f"right_wrist shape must be (1, 4, 4), got {wrist.shape}")
-        wrist_pos = wrist[0, :3, 3].astype(np_module.float32)
-        joints[0] = wrist_pos
-        joints -= wrist_pos
+    # avp_stream right_fingers appears to already be expressed in a wrist/palm-local
+    # hand frame where point 0 is the hand root. Subtracting the absolute wrist world
+    # position here would incorrectly deform the hand when the user translates the arm.
+    # We therefore keep the hand in its local frame for viewer rendering.
+    joints -= joints[0]
 
     transform = np_module.asarray(ARKIT_TO_VIEWER, dtype=np_module.float32)
     return (joints @ transform.T).astype(np_module.float32)
